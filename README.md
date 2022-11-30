@@ -84,7 +84,7 @@ val responseText = CoHttp(request).toText()
 
 ### Use response data
 
-If you simply want the response body as a String or ByteArray, you can use the following methods of `HTTP` class.
+If you simply want the response body as a String or ByteArray, you can use the following methods of `CoHTTP` class.
 - `suspend fun toText(charset: Charset? = null): String`
 - `suspend fun toByteArray(): ByteArray`
 
