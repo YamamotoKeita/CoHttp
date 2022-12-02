@@ -4,10 +4,10 @@ package cohttp
 import cohttp.enumtype.Method
 import cohttp.exception.HTTPException
 import cohttp.model.*
-import kotlinx.coroutines.CancellableContinuation
-import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.*
 import java.net.URL
 import java.nio.charset.Charset
+import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -15,7 +15,12 @@ import kotlin.coroutines.resumeWithException
 class CoHttp(
     private val mutableRequest: MutableRequest,
     val context: HTTPContext = HTTPContext.default
-) {
+): CoroutineScope {
+
+    override val coroutineContext: CoroutineContext = Dispatchers.IO
+
+    private var job: Job? = null
+
     private val httpConnector = context.makeHTTPConnector()
 
     private var validate: ((Response) -> Boolean)? = null
@@ -114,37 +119,37 @@ class CoHttp(
 
         context.logInfo("[${mutableRequest.method}] $url")
 
-        httpConnector.execute(mutableRequest) { response, exception ->
-            if (response == null) {
-                val httpException = HTTPException(mutableRequest, HTTPException.Type.NETWORK, null, exception)
+        this.job = launch {
+            try {
+                val response = httpConnector.execute(mutableRequest)
+                response.use {
+                    if (context.isCookieEnabled) {
+                        val headers = response.headerNames().mapNotNull { key ->
+                            val values = response.headers(key) ?: return@mapNotNull null
+                            key to values
+                        }.toMap()
+
+                        context.cookieManager.put(url.toURI(), headers)
+                    }
+
+                    onReceived?.invoke(response)
+
+                    val validate = this@CoHttp.validate
+                    if (validate != null && !validate(response)) {
+                        continuation.resumeWithException(HTTPException(mutableRequest, HTTPException.Type.INVALID_RESPONSE, response))
+                        return@use
+                    }
+
+                    try {
+                        val result = use(response)
+                        continuation.resume(result)
+                    } catch (e: Exception) {
+                        continuation.resumeWithException(e)
+                    }
+                }
+            } catch (e: Exception) {
+                val httpException = HTTPException(mutableRequest, HTTPException.Type.NETWORK, null, e)
                 continuation.resumeWithException(httpException)
-                return@execute
-            }
-
-            response.use {
-                if (context.isCookieEnabled) {
-                    val headers = response.headerNames().mapNotNull { key ->
-                        val values = response.headers(key) ?: return@mapNotNull null
-                        key to values
-                    }.toMap()
-
-                    context.cookieManager.put(url.toURI(), headers)
-                }
-
-                onReceived?.invoke(response)
-
-                val validate = this.validate
-                if (validate != null && !validate(response)) {
-                    continuation.resumeWithException(HTTPException(mutableRequest, HTTPException.Type.INVALID_RESPONSE, response, exception))
-                    return@execute
-                }
-
-                try {
-                    val result = use(response)
-                    continuation.resume(result)
-                } catch (e: Exception) {
-                    continuation.resumeWithException(e)
-                }
             }
         }
     }
@@ -180,7 +185,7 @@ class CoHttp(
     }
 
     fun cancel() {
-        httpConnector.cancel()
+        job?.cancel()
         continuation?.resumeWithException(HTTPException(mutableRequest, HTTPException.Type.CANCELED))
     }
 }

@@ -1,15 +1,14 @@
 package cohttp.model
 
 /**
- * TODO Now HTTPConnector launch and cancel the coroutine, but instead, CoHttp should do it. Then this interface can be more simple.
- *
  * A module to execute HTTP communication.
  * An HTTPConnector is assumed to be created each HTTP communication.
  * You can implement a custom HTTPConnector and apply it via HTTPContext.makeHTTPConnector.
  */
 interface HTTPConnector {
-
-    fun execute(request: Request, complete: (Response?, Exception?) -> Unit)
-
-    fun cancel()
+    /**
+     * Executes an HTTP communication synchronously and returns a response object.
+     * Otherwise, throws an exception.
+     */
+    fun execute(request: Request): Response
 }
