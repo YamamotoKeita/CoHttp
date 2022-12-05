@@ -140,6 +140,9 @@ class CoHttp(
                         return@use
                     }
 
+                    if (job?.isCancelled == true) {
+                        return@use
+                    }
                     try {
                         val result = use(response)
                         continuation.resume(result)
@@ -185,7 +188,11 @@ class CoHttp(
     }
 
     fun cancel() {
-        job?.cancel()
+        try {
+            job?.cancel()
+        } catch (t: Throwable) {
+            context.logger.warn(t)
+        }
         continuation?.resumeWithException(HTTPException(mutableRequest, HTTPException.Type.CANCELED))
     }
 }
