@@ -16,7 +16,7 @@ data class HTTPContext(
     var isLogEnabled: Boolean = true,
 
     /** A logger for output logs. You can change it to any other logger. */
-    var logger: Log = LogFactory.getLog(javaClass),
+    var logger: Log = LogFactory.getLog(HTTPContext::class.java),
 
     /** If this is true, cookies are saved and send. */
     var isCookieEnabled: Boolean = true,
